@@ -21,7 +21,7 @@ def Maks2Gray(img):
 
 def GetMask(prediction):
     mask=prediction[0]['masks']
-    mask = mask[0][0].float().cpu().numpy()
+    mask = mask[0][0].mul(255).byte().cpu().numpy()
     mask = Maks2Gray(mask)
     return mask
 
@@ -35,10 +35,14 @@ def GetResult(img,model_PATH = '../log/epoch-9-model.pkl'):
     return maskAll
 
 if __name__ == '__main__':
-    img = cv2.imread('../dataset/deepglobe/train/999667_sat.jpg')
-    mask = GetResult(img,'../log/1024-epoch-0-model.pkl')
+    img = cv2.imread('../test/NewYork-2.png')
+    mask = GetResult(img,'../log/ResNet50-ROI64-epoch-20-model.pkl')
     # cv2.namedWindow('final', cv2.WINDOW_NORMAL)
 
     cv2.imshow('res', img)
     cv2.imshow('mask_all', mask)
+
+    ret2, th2 = cv2.threshold(mask, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    cv2.imshow('thotsu',th2)
+
     cv2.waitKey(0)

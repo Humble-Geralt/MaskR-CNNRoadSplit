@@ -4,14 +4,22 @@ import lib.transforms as T
 from lib.DataAPI import *
 from lib.engine import train_one_epoch,evaluate
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+from torchvision.ops import MultiScaleRoIAlign
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 
 def GetInstanceSegmentationModel(NumClasses):
+    mask_roi_pool_cur = MultiScaleRoIAlign(
+                featmap_names=['0', '1', '2', '3'],
+                output_size=64,
+                sampling_ratio=2)
+
     #加载在COCO数据集预训练好的backbone
-    model = torchvision.models.detection.maskrcnn_resnet50_fpn(pretrained=True)
+    model = torchvision.models.detection.maskrcnn_resnet50_fpn(pretrained=True,mask_roi_pool = mask_roi_pool_cur)
+
     #获取模型的输入参数
     InFeatures = model.roi_heads.box_predictor.cls_score.in_features
     #替换已经训练好的模型头部
+
     model.roi_heads.box_predictor = FastRCNNPredictor(InFeatures,NumClasses)
     #获取输入mask分类器的输入参数数量
     InFeaturesMask = model.roi_heads.mask_predictor.conv5_mask.in_channels
@@ -19,6 +27,7 @@ def GetInstanceSegmentationModel(NumClasses):
     hidden_layer = 256
     #替换mask分类头
     model.roi_heads.mask_predictor =MaskRCNNPredictor(InFeaturesMask,hidden_layer,NumClasses)
+
     return model
 
 def GetTransform(train):
@@ -66,7 +75,7 @@ def main():
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer,step_size=3,gamma=0.1)
 
     #训练
-    num_epochs = 1
+    num_epochs = 20
     for epoch in range(num_epochs):
         train_one_epoch(model,optimizer,data_loader,device,epoch,print_freq=10)
 
@@ -77,7 +86,7 @@ def main():
         evaluate(model, data_loader_test, device=device)
 
           # 保存模型
-        torch.save(model, '../log/1024-epoch-{}-model.pkl'.format(epoch))
+        torch.save(model, '../log/ResNet50-ROI64-epoch-{}-model.pkl'.format(epoch+1))
 
 
     img, _ = dataset_test[0]
