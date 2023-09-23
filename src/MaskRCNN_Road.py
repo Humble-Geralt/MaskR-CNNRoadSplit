@@ -6,15 +6,20 @@ from lib.engine import train_one_epoch,evaluate
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.ops import MultiScaleRoIAlign
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
+from lib.recordloss import TrainVision
+from torchvision.models.detection.backbone_utils import resnet_fpn_backbone
 
 def GetInstanceSegmentationModel(NumClasses):
     mask_roi_pool_cur = MultiScaleRoIAlign(
                 featmap_names=['0', '1', '2', '3'],
-                output_size=64,
+                output_size=14,
                 sampling_ratio=2)
 
     #加载在COCO数据集预训练好的backbone
     model = torchvision.models.detection.maskrcnn_resnet50_fpn(pretrained=True,mask_roi_pool = mask_roi_pool_cur)
+
+    resnet101 = resnet_fpn_backbone('resnet101', True)
+    model.backbone = resnet101
 
     #获取模型的输入参数
     InFeatures = model.roi_heads.box_predictor.cls_score.in_features
@@ -40,6 +45,13 @@ def GetTransform(train):
     return T.Compose(transforms)
 
 def main():
+    #建立可视化画板
+    # 初始化
+    vt = TrainVision()
+    loss_list = []
+    mask_loss_list = []
+    reg_loss_list = []
+
     #加载数据集
     dataset = deepglobledataset('../dataset/deepglobe/train',GetTransform(train=True))
     datasetTest = deepglobledataset('../dataset/deepglobe/train',GetTransform(train=False))
@@ -77,18 +89,28 @@ def main():
     #训练
     num_epochs = 20
     for epoch in range(num_epochs):
-        train_one_epoch(model,optimizer,data_loader,device,epoch,print_freq=10)
+        metric_logger = train_one_epoch(model,optimizer,data_loader,device,epoch,print_freq=10)
+
+        loss_list.append(float(str(metric_logger.loss).split('(')[-1][1:-1]))
+        mask_loss_list.append(float(str(metric_logger.loss_mask).split('(')[-1][1:-1]))
+        reg_loss_list.append(float(str(metric_logger.loss_box_reg).split('(')[-1][1:-1]))
 
         #更新学习率
         lr_scheduler.step()
 
-        #测试
-        evaluate(model, data_loader_test, device=device)
-
           # 保存模型
-        torch.save(model, '../log/ResNet50-ROI64-epoch-{}-model.pkl'.format(epoch+1))
+        torch.save(model, '../log/ResNet101-256-epoch-{}-model.pkl'.format(epoch+1))
 
+    # 测试
+    #evaluate(model, data_loader_test, device=device)
 
+    for epochs, (loss, mask_loss, reg_loss) in enumerate(zip(loss_list, mask_loss_list, reg_loss_list)):
+
+        # 每个 epoch 绘制 训练精度 和 训练损失
+        vt.draw(epochs, loss, mask_loss, reg_loss)
+
+    PicPath = os.path.join('../pic','loss-ResNet101-ROI16.png')
+    vt.save(PicPath)
     img, _ = dataset_test[0]
     model.eval()
     with torch.no_grad():

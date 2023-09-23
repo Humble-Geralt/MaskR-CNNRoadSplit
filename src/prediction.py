@@ -3,6 +3,7 @@ import utils
 import torchvision.transforms as transforms
 from lib.DataAPI import *
 import cv2
+from matplotlib import pyplot as plt
 
 #送入神经网络，获取预测结果
 def GetPrediction(img,model):
@@ -28,6 +29,8 @@ def GetMask(prediction):
 def GetResult(img,model_PATH = '../log/epoch-9-model.pkl'):
     #得到预测结果，返回一个tonser张量
     model = torch.load(model_PATH)
+    model.eval()
+    print(model)
     prediction=GetPrediction(img,model)
     #获取所有mask
     maskAll=GetMask(prediction)
@@ -35,7 +38,7 @@ def GetResult(img,model_PATH = '../log/epoch-9-model.pkl'):
     return maskAll
 
 if __name__ == '__main__':
-    img = cv2.imread('../test/NewYork-2.png')
+    img = cv2.imread('../dataset/deepglobe/train/226764_sat.jpg')
     mask = GetResult(img,'../log/ResNet50-ROI64-epoch-20-model.pkl')
     # cv2.namedWindow('final', cv2.WINDOW_NORMAL)
 
@@ -43,6 +46,22 @@ if __name__ == '__main__':
     cv2.imshow('mask_all', mask)
 
     ret2, th2 = cv2.threshold(mask, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    cv2.imshow('thotsu',th2)
+    th3 = cv2.multiply(mask,mask)
+    ret4, th4 = cv2.threshold(th3, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (11, 9))  # 定义结构元素
+    opening = cv2.morphologyEx(th4, cv2.MORPH_OPEN, kernel)
+
+    """    plt.subplots(1, 1, figsize=(6, 5))
+    plt.hist(th2.ravel(), 256)
+    plt.show()"""
+
+    cv2.imshow('mask',mask)
+    cv2.imshow('opening',opening)
+
+
+    cv2.imwrite('../pic/sample/frame.png',img)
+    cv2.imwrite('../pic/sample/mask.png',mask)
+    cv2.imwrite('../pic/sample/result.png', opening)
 
     cv2.waitKey(0)
